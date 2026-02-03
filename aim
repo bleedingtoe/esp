@@ -1,0 +1,69 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Configuration
+local Settings = {
+    Enabled = true,
+    TargetPart = "Head", -- Change to "HumanoidRootPart" if Head is protected
+    FOV = 250,
+    LockStrength = 1, -- 1 = Total Lock, 0.1 = Smooth
+}
+
+local HoldingMouse2 = false
+
+-- Find target closest to center of screen
+local function GetClosestPlayer()
+    local Target = nil
+    local MaxDist = Settings.FOV
+
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Settings.TargetPart) then
+            -- Team Check
+            if v.Team and v.Team == LocalPlayer.Team then continue end
+            
+            local Part = v.Character[Settings.TargetPart]
+            local ScreenPos, OnScreen = Camera:WorldToViewportPoint(Part.Position)
+            
+            if OnScreen then
+                local Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                local Dist = (Vector2.new(ScreenPos.X, ScreenPos.Y) - Center).Magnitude
+
+                if Dist < MaxDist then
+                    MaxDist = Dist
+                    Target = Part
+                end
+            end
+        end
+    end
+    return Target
+end
+
+-- Input Detection (Hold to Lock)
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        HoldingMouse2 = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        HoldingMouse2 = false
+    end
+end)
+
+-- The Camlock Loop (Priority Camera)
+RunService:BindToRenderStep("Camlock", Enum.RenderPriority.Camera.Value + 1, function()
+    if Settings.Enabled and HoldingMouse2 then
+        local Target = GetClosestPlayer()
+        if Target then
+            -- This is the "Camlock" math: Force look at target
+            local CurrentCF = Camera.CFrame
+            local TargetCF = CFrame.new(CurrentCF.Position, Target.Position)
+            
+            Camera.CFrame = CurrentCF:Lerp(TargetCF, Settings.LockStrength)
+        end
+    end
+end)
